@@ -14,7 +14,7 @@ __all__ = [
 ]
 
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 _current_cancel_scope = ContextVar('_current_cancel_scope', default=None)
 
@@ -31,7 +31,6 @@ async def _run_async(func, *args, **kwargs):
 		return await func(*args, **kwargs)
 	else:
 		return await asyncio.to_thread(func, *args, **kwargs)
-
 
 class CancelScope:
 	"""Synchronous context-aware cancellation scope for handling cancellation and timeout

@@ -3,7 +3,6 @@ import time
 import inspect
 import asyncio
 import threading
-from math import inf
 from contextvars import ContextVar, Token
 from concurrent.futures import CancelledError
 from asyncio import CancelledError as AsyncCancelledError
@@ -14,7 +13,7 @@ __all__ = [
 ]
 
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 _current_cancel_scope = ContextVar('_current_cancel_scope', default=None)
 
@@ -99,10 +98,11 @@ class CancelScope:
 				self._bubble = True
 			if not self._shield:
 				parent_timeout = self._parent.timeout()
-				if self._timeout is None:
-					self._timeout = parent_timeout
-				else:
-					self._timeout = min(self._timeout, parent_timeout)
+				if parent_timeout is not None:
+					if self._timeout is None:
+						self._timeout = parent_timeout
+					else:
+						self._timeout = min(self._timeout, parent_timeout)
 		if self._timeout is not None:
 			self._deadline = self._entered + self._timeout
 		if self._check_on_enter:
@@ -118,12 +118,18 @@ class CancelScope:
 		if exc_val is None and self._check_on_exit:
 			self.check()
 	
-	def timeout(self) -> float:
-		"""Return the number of seconds remaining until this scope times out."""
+	def timeout(self) -> Optional[float]:
+		"""Return the number of seconds remaining until this scope times out or 
+		None if unlimited time remains.
+		
+		If already cancelled, 0 is returned.
+		If scope context not entered yet, the timeout setting for the scope will
+			be returned.
+		"""
 		if self._cancelled:
 			return 0
 		if self._timeout is None:
-			return inf
+			return None  # None usually means no timeout for most python packages
 		if self._entered is None:
 			return self._timeout
 		remsecs = self._deadline - time.time()
@@ -193,7 +199,10 @@ class CancelScope:
 		The shield only applies in the event of a parent trying to cancel
 		its children.
 		"""
-		if self.timeout() > 0:
+		timeout = self.timeout()
+		if timeout is None:
+			return
+		if timeout > 0:
 			return
 		self._cancel(self)
 		if self._exc is None:
@@ -227,10 +236,11 @@ class AsyncCancelScope(CancelScope):
 				self._bubble = True
 			if not self._shield:
 				parent_timeout = self._parent.timeout()
-				if self._timeout is None:
-					self._timeout = parent_timeout
-				else:
-					self._timeout = min(self._timeout, parent_timeout)
+				if parent_timeout is not None:
+					if self._timeout is None:
+						self._timeout = parent_timeout
+					else:
+						self._timeout = min(self._timeout, parent_timeout)
 		if self._timeout is not None:
 			self._deadline = self._entered + self._timeout
 		if self._check_on_enter:
@@ -290,7 +300,10 @@ class AsyncCancelScope(CancelScope):
 	cancel.__doc__ = CancelScope.cancel.__doc__
 
 	async def check(self) -> None:
-		if self.timeout() > 0:
+		timeout = self.timeout()
+		if timeout is None:
+			return
+		if timeout > 0:
 			return
 		await self._cancel(self)
 		if self._exc is None:

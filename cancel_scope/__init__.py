@@ -13,14 +13,14 @@ __all__ = [
 ]
 
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 _current_cancel_scope = ContextVar('_current_cancel_scope', default=None)
 
 
 def _run_sync(func, *args, **kwargs):
 	if inspect.iscoroutinefunction(func):
-		return asyncio.run(func(*args, **kwargs))
+		return asyncio.get_event_loop().run_until_complete(func(*args, **kwargs))
 	else:
 		return func(*args, **kwargs)
 
